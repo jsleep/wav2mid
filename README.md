@@ -24,11 +24,12 @@ The design for the system is as follows:
 * Evaluate it's performance on audio/midi pairs we have not trained on
 
 ## Implementation
+### Libraries
 * Python - due to the abundance of music and machine learning libraries developed for it
 * librosa - for digital signal processing methods
 * pretty_midi - for midi manipulation methods
 * TensorFlow - for deep learning
 
 ## Data
-* MAPS dataset
-* Large MIDI collection - which can be synthesized to audio (sorta cheating)
+* [MAPS dataset](http://www.tsi.telecom-paristech.fr/aao/en/2010/07/08/maps-database-a-piano-database-for-multipitch-estimation-and-automatic-transcription-of-music/)
+* [Large MIDI collection](https://www.reddit.com/r/WeAreTheMusicMakers/comments/3ajwe4/the_largest_midi_collection_on_the_internet/) - which can be synthesized to audio (sort of cheating)
