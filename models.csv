@@ -1,0 +1,3 @@
+model_name,spec_type,init_lr,lr_decay,bin_multiple,residual
+new,cqt,1e-1,half,4,True
+baseline,cqt,1e-2,linear,3,False
