@@ -1,4 +1,3 @@
-from __future__ import division
 
 from collections import defaultdict
 import sys, os
@@ -30,14 +29,14 @@ def readmm(d,args):
 
 class DataGen:
     def __init__(self, dirpath, batch_size,args,num_files=1):
-        print 'initializing gen for '+dirpath
+        print('initializing gen for '+dirpath)
 
         self.mmdirs =  os.listdir(dirpath)
         self.spe = 0 #steps per epoch
         self.dir = dirpath
 
         for mmdir in self.mmdirs:
-            print mmdir
+            print(mmdir)
             _,outputs = readmm(os.path.join(self.dir,mmdir),args)
             self.spe += len(outputs) // batch_size
             #print cnt
@@ -45,31 +44,32 @@ class DataGen:
 
         self.batch_size = batch_size
         self.current_file_idx = 0
-        print 'starting with ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files]
+        print('starting with ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files])
         for j in range(self.num_files):
             mmdir = os.path.join(self.dir,self.mmdirs[self.current_file_idx+j])
+            print(mmdir)
             i,o = readmm(mmdir,args)
             if j == 0:
                 self.inputs,self.outputs = i,o
-                print 'set inputs,outputs'
+                print('set inputs,outputs')
             else:
                 self.inputs = np.concatenate((self.inputs,i))
                 self.outputs = np.concatenate((self.outputs,o))
-                print 'concatenated'
+                print('concatenated')
             self.current_file_idx = (self.current_file_idx + 1) % len(self.mmdirs)
         self.i = 0
 
     def steps(self):
         return self.spe
 
-    def next(self):
+    def __next__(self):
         while True:
             if (self.i+1)*self.batch_size > self.inputs.shape[0]:
                 #return rest and then switch files
                 x,y = self.inputs[self.i*self.batch_size:],self.outputs[self.i*self.batch_size:]
                 self.i = 0
                 if len(self.mmdirs) > 1: # no need to open any new files if we only deal with one, like for validation
-                    print 'switching to ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files]
+                    print('switching to ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files])
                     for j in range(self.num_files):
                         mmdir = os.path.join(self.dir,self.mmdirs[self.current_file_idx+j])
                         i,o = readmm(mmdir,args)
@@ -131,7 +131,7 @@ def wav2inputnp(audio_fn,spec_type='cqt',bin_multiple=3):
 
     minDB = np.min(S)
 
-    print np.min(S),np.max(S),np.mean(S)
+    print(np.min(S),np.max(S),np.mean(S))
 
     S = np.pad(S, ((window_size//2,window_size//2),(0,0)), 'constant', constant_values=minDB)
 
@@ -218,7 +218,7 @@ def preprocess(args):
         if not os.path.isdir(subdir):
             continue
         # recursively search in subdir
-        print subdir
+        print(subdir)
         inputs,outputs = [],[]
         addCnt, errCnt = 0,0
         for dp, dn, filenames in os.walk(subdir):
