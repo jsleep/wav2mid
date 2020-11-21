@@ -181,6 +181,7 @@ def organize(args):
     val_path = joinAndCreate(dpath,'val')
 
     for ddir in os.listdir(dpath):
+        print("organize(): %s" % ddir)
         if os.path.isdir(os.path.join(dpath,ddir)) and not isSplitFolder(ddir):
             #print h5file
             if ddir.startswith(testPrefix):

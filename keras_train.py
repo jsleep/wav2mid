@@ -37,7 +37,7 @@ import os
 
 def opt_thresholds(y_true,y_scores):
     othresholds = np.zeros(y_scores.shape[1])
-    print(othresholds.shape)
+    print("opt_thresholds() {}".format(othresholds.shape))
     for label, (label_scores, true_bin) in enumerate(zip(y_scores.T,y_true.T)):
         #print label
         precision, recall, thresholds = sklearn.metrics.precision_recall_curve(true_bin, label_scores)
@@ -50,7 +50,7 @@ def opt_thresholds(y_true,y_scores):
                 max_f1_threshold = t
         #print label, ": ", max_f1_threshold, "=>", max_f1
         othresholds[label] = max_f1_threshold
-        print(othresholds)
+        print("opt_thresholds() {}".format(othresholds))
     return othresholds
 
 class linear_decay(Callback):
@@ -139,7 +139,7 @@ def resnet_model(bin_multiple):
     pool = MaxPooling2D(pool_size=(1,2))(conv)
 
     for i in range(int(np.log2(bin_multiple))-1):
-        print(i)
+        print("resnet_model() {}".format(i))
         #residual block
         bn = BatchNormalization()(pool)
         re = Activation('relu')(bn)
@@ -198,7 +198,7 @@ def train(args):
         print('loading model')
         model = load_model(model_ckpt)
     else:
-        print('training new model from scratch')
+        print('training new model from scratch with bin multiple {0}'.format(bin_multiple))
         if bool(args['residual']):
             model = resnet_model(int(bin_multiple))
         else:
