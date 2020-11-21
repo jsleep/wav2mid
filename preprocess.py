@@ -320,6 +320,11 @@ if __name__ == '__main__':
     parser.add_argument('data_dir',
                         help='Path to data dir, searched recursively, used for naming HDF5 file')
 
+    parser.add_argument('-b', dest='bin_multiple', type=int, default=4,
+                        help='bin multiple (default: %(default)s)')
+
+    parser.add_argument('-s', dest='spec_type', default='cqt',
+                        help='Spec type (default: %(default)s)')
 
     parser.add_argument('--no-zn', dest='zn', action='store_false')
     parser.set_defaults(zn=True)
