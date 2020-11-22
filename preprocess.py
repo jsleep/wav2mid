@@ -200,7 +200,6 @@ def modelDapathtaExists(path, s):
             return True
     return False
 
-data_dir = '../maps/'
 def preprocess(args):
     #params
     path = os.path.join('models',args['model_name'])
@@ -220,8 +219,8 @@ def preprocess(args):
     # https://github.com/craffel/pretty-midi/issues/112
     pretty_midi.pretty_midi.MAX_TICK = 1e10
 
-    for s in os.listdir(data_dir):
-        subdir = os.path.join(data_dir,s)
+    for s in os.listdir(args['data_dir']):
+        subdir = os.path.join(args['data_dir'],s)
         if not os.path.isdir(subdir):
             continue
         try:
@@ -333,8 +332,8 @@ if __name__ == '__main__':
     parser.add_argument('model_name',
                         help='model name. will use config from directory and save preprocessed data to it')
 
-    parser.add_argument('data_dir',
-                        help='Path to data dir, searched recursively, used for naming HDF5 file')
+    parser.add_argument('data_dir', default='../maps/',
+                        help='Path to data dir, searched recursively, used for naming HDF5 file (default: %(default)s)')
 
     parser.add_argument('-b', dest='bin_multiple', type=int, default=4,
                         help='bin multiple (default: %(default)s)')
@@ -343,7 +342,7 @@ if __name__ == '__main__':
                         help='Spec type (default: %(default)s)')
 
     parser.add_argument('-f', '--force', action='store_true', default=False,
-                        help='Force overwrite existed model data')
+                        help='Force overwrite existed model data (default: %(default)s)')
 
     parser.add_argument('--no-zn', dest='zn', action='store_false')
     parser.set_defaults(zn=True)
