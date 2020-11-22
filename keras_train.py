@@ -222,7 +222,7 @@ def train(args):
     #t = Threshold(valData)
     callbacks = [checkpoint,early_stop,decay,csv_logger]
 
-    history = model.fit_generator(next(trainGen),trainGen.steps(), epochs=epochs,
+    history = model.fit(next(trainGen),steps_per_epoch=trainGen.steps(), epochs=epochs,
               verbose=1,validation_data=next(valGen),validation_steps=valGen.steps(),callbacks=callbacks)
 
     # list all data in history
