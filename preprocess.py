@@ -192,6 +192,13 @@ def organize(args):
             else:
                 os.rename(os.path.join(dpath,ddir), os.path.join(train_path,ddir))
 
+def modelDapathtaExists(path, s):
+    dirs = ['val','test','train']
+    for ddir in dirs:
+        full_dir = os.path.join(path,'data',ddir,s)
+        if os.path.isdir(full_dir):
+            return True
+    return False
 
 data_dir = '../maps/'
 def preprocess(args):
@@ -213,11 +220,20 @@ def preprocess(args):
     # https://github.com/craffel/pretty-midi/issues/112
     pretty_midi.pretty_midi.MAX_TICK = 1e10
 
-
     for s in os.listdir(data_dir):
         subdir = os.path.join(data_dir,s)
         if not os.path.isdir(subdir):
             continue
+        try:
+            if not args.force:
+                if modelDapathtaExists(path, s):
+                    print("{} exists, skiping".format(s))
+                    continue
+        except AttributeError:
+            if modelDapathtaExists(path, s):
+                print("{} exists, skiping".format(s))
+                continue
+
         # recursively search in subdir
         print(subdir)
         inputs,outputs = [],[]
@@ -325,6 +341,9 @@ if __name__ == '__main__':
 
     parser.add_argument('-s', dest='spec_type', default='cqt',
                         help='Spec type (default: %(default)s)')
+
+    parser.add_argument('-f', '--force', action='store_true', default=False,
+                        help='Force overwrite existed model data')
 
     parser.add_argument('--no-zn', dest='zn', action='store_false')
     parser.set_defaults(zn=True)
