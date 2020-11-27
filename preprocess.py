@@ -14,6 +14,7 @@ import math
 from config import load_config
 
 import numpy as np
+import multiprocessing
 
 def readmm(d,args):
     ipath = os.path.join(d,'input.dat')
@@ -200,12 +201,53 @@ def modelDapathtaExists(path, s):
         if os.path.isdir(full_dir):
             return True
     return False
+def _preprocess(args, dp, dn, filenames):
+    framecnt = 0
+    inputs, outputs = [], []
+    addCnt, errCnt = 0, 0
+    for f in filenames:
+    # if there exists a .wav file and .midi file with the same name
+        if f.endswith('.wav'):
+            audio_fn = f
+            fprefix = audio_fn.split('.wav')[0]
+            mid_fn = fprefix + '.mid'
+            txt_fn = fprefix + '.txt'
+            if mid_fn in filenames:
+                # wav2inputnp
+                audio_fn = os.path.join(dp,audio_fn)
+                # mid2outputnp
+                mid_fn = os.path.join(dp,mid_fn)
 
+                pm_mid = pretty_midi.PrettyMIDI(mid_fn)
+
+                inputnp = wav2inputnp(audio_fn,spec_type=args['spec_type'],bin_multiple=args['bin_multiple'])
+                times = librosa.frames_to_time(np.arange(inputnp.shape[0]),sr=sr,hop_length=hop_length)
+                outputnp = mid2outputnp(pm_mid,times)
+
+                # check that num onsets is equal
+                if inputnp.shape[0] == outputnp.shape[0]:
+                    print("adding to dataset fprefix {}".format(fprefix))
+                    addCnt += 1
+                    framecnt += inputnp.shape[0]
+                    print("framecnt is {}".format(framecnt))
+                    inputs.append(inputnp)
+                    outputs.append(outputnp)
+                else:
+                    print("error for fprefix {}".format(fprefix))
+                    errCnt += 1
+                    print(inputnp.shape)
+                    print(outputnp.shape)
+
+            print("{} examples in dataset".format(addCnt))
+            print("{} examples couldnt be processed".format(errCnt))
+
+    return (inputs, outputs, addCnt, errCnt)
 def preprocess(args):
     #params
     path = os.path.join('models',args['model_name'])
     config = load_config(os.path.join(path,'config.json'))
 
+    pool=multiprocessing.Pool(args['threads'])
 
 
     bin_multiple = int(args['bin_multiple'])
@@ -213,8 +255,6 @@ def preprocess(args):
 
 
 
-
-    framecnt = 0
 
     # hack to deal with high PPQ from MAPS
     # https://github.com/craffel/pretty-midi/issues/112
@@ -238,47 +278,18 @@ def preprocess(args):
         print(subdir)
         inputs,outputs = [],[]
         addCnt, errCnt = 0,0
-        for dp, dn, filenames in os.walk(subdir):
-            # in each level of the directory, look at filenames ending with .mid
-            for f in filenames:
-                # if there exists a .wav file and .midi file with the same name
-
-                if f.endswith('.wav'):
-                    audio_fn = f
-                    fprefix = audio_fn.split('.wav')[0]
-                    mid_fn = fprefix + '.mid'
-                    txt_fn = fprefix + '.txt'
-                    if mid_fn in filenames:
-                        # wav2inputnp
-                        audio_fn = os.path.join(dp,audio_fn)
-                        # mid2outputnp
-                        mid_fn = os.path.join(dp,mid_fn)
-
-                        pm_mid = pretty_midi.PrettyMIDI(mid_fn)
-
-                        inputnp = wav2inputnp(audio_fn,spec_type=spec_type,bin_multiple=bin_multiple)
-                        times = librosa.frames_to_time(np.arange(inputnp.shape[0]),sr=sr,hop_length=hop_length)
-                        outputnp = mid2outputnp(pm_mid,times)
-
-                        # check that num onsets is equal
-                        if inputnp.shape[0] == outputnp.shape[0]:
-                            print("adding to dataset fprefix {}".format(fprefix))
-                            addCnt += 1
-                            framecnt += inputnp.shape[0]
-                            print("framecnt is {}".format(framecnt))
-                            inputs.append(inputnp)
-                            outputs.append(outputnp)
-                        else:
-                            print("error for fprefix {}".format(fprefix))
-                            errCnt += 1
-                            print(inputnp.shape)
-                            print(outputnp.shape)
-
-        print("{} examples in dataset".format(addCnt))
-        print("{} examples couldnt be processed".format(errCnt))
-
+        arguments = []
+        for root, dirs, filename in os.walk(subdir):
+            arguments.append([args, root, dirs, filename])
+        results = pool.starmap(_preprocess, arguments)
 
         # concatenate dynamic list to numpy list of example
+        for i, o, a, e in results:
+            inputs.append(i)
+            outputs.append(o)
+            addCnt+=a
+            errCnt+=e
+
         if addCnt:
             inputs = np.concatenate(inputs)
             outputs = np.concatenate(outputs)
@@ -326,6 +337,8 @@ def preprocess(args):
 
 
 if __name__ == '__main__':
+    counts=multiprocessing.cpu_count()
+
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(
         description='Preprocess MIDI/Audio file pairs into ingestible data')
@@ -347,6 +360,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--no-zn', dest='zn', action='store_false')
     parser.set_defaults(zn=True)
+
+    parser.add_argument('-t', '--threads', metavar='N',type=int, required=False, help='Numbers of threads for models (default=%(default)s, max={})'.format(str(counts)),default=1)
 
     args = vars(parser.parse_args())
 
