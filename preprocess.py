@@ -34,6 +34,7 @@ class DataGen:
         self.mmdirs =  os.listdir(dirpath)
         self.spe = 0 #steps per epoch
         self.dir = dirpath
+        self.args = args
 
         for mmdir in self.mmdirs:
             print(mmdir)
@@ -72,7 +73,7 @@ class DataGen:
                     print('switching to ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files])
                     for j in range(self.num_files):
                         mmdir = os.path.join(self.dir,self.mmdirs[self.current_file_idx+j])
-                        i,o = readmm(mmdir,args)
+                        i,o = readmm(mmdir,self.args)
                         if j == 0:
                             self.inputs,self.output = i,o
                         else:
