@@ -170,6 +170,7 @@ note_range = max_midi - min_midi + 1
 
 def train(args):
     path = os.path.join('models',args['model_name'])
+    model_filename = path + ".hdf5"
     config = load_config(os.path.join(path,'config.json'))
 
     global feature_bins
@@ -224,7 +225,7 @@ def train(args):
 
     history = model.fit(next(trainGen),steps_per_epoch=trainGen.steps(), epochs=epochs,
               verbose=1,validation_data=next(valGen),validation_steps=valGen.steps(),callbacks=callbacks)
-
+    model.save(model_filename)
     # list all data in history
     print(history.history.keys())
     # summarize history for accuracy
