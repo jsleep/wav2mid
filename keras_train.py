@@ -37,7 +37,7 @@ import os
 
 def opt_thresholds(y_true,y_scores):
     othresholds = np.zeros(y_scores.shape[1])
-    print othresholds.shape
+    print("opt_thresholds() {}".format(othresholds.shape))
     for label, (label_scores, true_bin) in enumerate(zip(y_scores.T,y_true.T)):
         #print label
         precision, recall, thresholds = sklearn.metrics.precision_recall_curve(true_bin, label_scores)
@@ -50,7 +50,7 @@ def opt_thresholds(y_true,y_scores):
                 max_f1_threshold = t
         #print label, ": ", max_f1_threshold, "=>", max_f1
         othresholds[label] = max_f1_threshold
-        print othresholds
+        print("opt_thresholds() {}".format(othresholds))
     return othresholds
 
 class linear_decay(Callback):
@@ -99,8 +99,8 @@ class Threshold(Callback):
         self.othresholds = opt_thresholds(y_true,y_scores)
         y_pred = y_scores > self.othresholds
         p,r,f,s = sklearn.metrics.precision_recall_fscore_support(y_true,y_pred,average='micro')
-        print "validation p,r,f,s:"
-        print p,r,f,s
+        print("validation p,r,f,s:")
+        print(p,r,f,s)
 
 def baseline_model():
     inputs = Input(shape=input_shape)
@@ -139,13 +139,13 @@ def resnet_model(bin_multiple):
     pool = MaxPooling2D(pool_size=(1,2))(conv)
 
     for i in range(int(np.log2(bin_multiple))-1):
-        print i
+        print("resnet_model() {}".format(i))
         #residual block
         bn = BatchNormalization()(pool)
         re = Activation('relu')(bn)
         freq_range = (bin_multiple/(2**(i+1)))*note_range
-        print freq_range
-        conv = Conv2D(64,(1,freq_range),padding="same",activation='relu')(re)
+        print("resnet_model() {}".format(freq_range))
+        conv = Conv2D(64,(1,int(freq_range)),padding="same",activation='relu')(re)
 
         #add and downsample
         ad = add([pool,conv])
@@ -170,6 +170,7 @@ note_range = max_midi - min_midi + 1
 
 def train(args):
     path = os.path.join('models',args['model_name'])
+    model_filename = path + ".hdf5"
     config = load_config(os.path.join(path,'config.json'))
 
     global feature_bins
@@ -198,9 +199,9 @@ def train(args):
         print('loading model')
         model = load_model(model_ckpt)
     else:
-        print('training new model from scratch')
+        print('training new model from scratch with bin multiple {0}'.format(bin_multiple))
         if bool(args['residual']):
-            model = resnet_model(bin_multiple)
+            model = resnet_model(int(bin_multiple))
         else:
             model = baseline_model()
 
@@ -222,9 +223,9 @@ def train(args):
     #t = Threshold(valData)
     callbacks = [checkpoint,early_stop,decay,csv_logger]
 
-    history = model.fit_generator(trainGen.next(),trainGen.steps(), epochs=epochs,
-              verbose=1,validation_data=valGen.next(),validation_steps=valGen.steps(),callbacks=callbacks)
-
+    history = model.fit(next(trainGen),steps_per_epoch=trainGen.steps(), epochs=epochs,
+              verbose=1,validation_data=next(valGen),validation_steps=valGen.steps(),callbacks=callbacks)
+    model.save(model_filename)
     # list all data in history
     print(history.history.keys())
     # summarize history for accuracy
@@ -248,7 +249,7 @@ def train(args):
     #test
     testGen = DataGen(os.path.join(path,'data','test'),batch_size,args)
 
-    res = model.evaluate_generator(testGen.next(),steps=testGen.steps())
+    res = model.evaluate_generator(next(testGen),steps=testGen.steps())
     print(model.metrics_names)
     print(res)
 

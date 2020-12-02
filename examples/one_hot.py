@@ -1,4 +1,4 @@
-from __future__ import division
+
 """
 Simple function for converting Pretty MIDI object into one-hot encoding
 / piano-roll-like to be used for machine learning.

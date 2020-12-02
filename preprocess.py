@@ -1,4 +1,3 @@
-from __future__ import division
 
 from collections import defaultdict
 import sys, os
@@ -15,6 +14,7 @@ import math
 from config import load_config
 
 import numpy as np
+import multiprocessing
 
 def readmm(d,args):
     ipath = os.path.join(d,'input.dat')
@@ -30,14 +30,15 @@ def readmm(d,args):
 
 class DataGen:
     def __init__(self, dirpath, batch_size,args,num_files=1):
-        print 'initializing gen for '+dirpath
+        print('initializing gen for '+dirpath)
 
         self.mmdirs =  os.listdir(dirpath)
         self.spe = 0 #steps per epoch
         self.dir = dirpath
+        self.args = args
 
         for mmdir in self.mmdirs:
-            print mmdir
+            print(mmdir)
             _,outputs = readmm(os.path.join(self.dir,mmdir),args)
             self.spe += len(outputs) // batch_size
             #print cnt
@@ -45,34 +46,35 @@ class DataGen:
 
         self.batch_size = batch_size
         self.current_file_idx = 0
-        print 'starting with ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files]
+        print('starting with ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files])
         for j in range(self.num_files):
             mmdir = os.path.join(self.dir,self.mmdirs[self.current_file_idx+j])
+            print(mmdir)
             i,o = readmm(mmdir,args)
             if j == 0:
                 self.inputs,self.outputs = i,o
-                print 'set inputs,outputs'
+                print('set inputs,outputs')
             else:
                 self.inputs = np.concatenate((self.inputs,i))
                 self.outputs = np.concatenate((self.outputs,o))
-                print 'concatenated'
+                print('concatenated')
             self.current_file_idx = (self.current_file_idx + 1) % len(self.mmdirs)
         self.i = 0
 
     def steps(self):
         return self.spe
 
-    def next(self):
+    def __next__(self):
         while True:
             if (self.i+1)*self.batch_size > self.inputs.shape[0]:
                 #return rest and then switch files
                 x,y = self.inputs[self.i*self.batch_size:],self.outputs[self.i*self.batch_size:]
                 self.i = 0
                 if len(self.mmdirs) > 1: # no need to open any new files if we only deal with one, like for validation
-                    print 'switching to ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files]
+                    print('switching to ', self.mmdirs[self.current_file_idx:self.current_file_idx+self.num_files])
                     for j in range(self.num_files):
                         mmdir = os.path.join(self.dir,self.mmdirs[self.current_file_idx+j])
-                        i,o = readmm(mmdir,args)
+                        i,o = readmm(mmdir,self.args)
                         if j == 0:
                             self.inputs,self.output = i,o
                         else:
@@ -131,7 +133,7 @@ def wav2inputnp(audio_fn,spec_type='cqt',bin_multiple=3):
 
     minDB = np.min(S)
 
-    print np.min(S),np.max(S),np.mean(S)
+    print(np.min(S),np.max(S),np.mean(S))
 
     S = np.pad(S, ((window_size//2,window_size//2),(0,0)), 'constant', constant_values=minDB)
 
@@ -181,6 +183,7 @@ def organize(args):
     val_path = joinAndCreate(dpath,'val')
 
     for ddir in os.listdir(dpath):
+        print("organize(): %s" % ddir)
         if os.path.isdir(os.path.join(dpath,ddir)) and not isSplitFolder(ddir):
             #print h5file
             if ddir.startswith(testPrefix):
@@ -191,13 +194,60 @@ def organize(args):
             else:
                 os.rename(os.path.join(dpath,ddir), os.path.join(train_path,ddir))
 
+def modelDapathtaExists(path, s):
+    dirs = ['val','test','train']
+    for ddir in dirs:
+        full_dir = os.path.join(path,'data',ddir,s)
+        if os.path.isdir(full_dir):
+            return True
+    return False
+def _preprocess(args, dp, dn, filenames):
+    framecnt = 0
+    inputs, outputs = [], []
+    addCnt, errCnt = 0, 0
+    for f in filenames:
+    # if there exists a .wav file and .midi file with the same name
+        if f.endswith('.wav'):
+            audio_fn = f
+            fprefix = audio_fn.split('.wav')[0]
+            mid_fn = fprefix + '.mid'
+            txt_fn = fprefix + '.txt'
+            if mid_fn in filenames:
+                # wav2inputnp
+                audio_fn = os.path.join(dp,audio_fn)
+                # mid2outputnp
+                mid_fn = os.path.join(dp,mid_fn)
 
-data_dir = '../maps/'
+                pm_mid = pretty_midi.PrettyMIDI(mid_fn)
+
+                inputnp = wav2inputnp(audio_fn,spec_type=args['spec_type'],bin_multiple=args['bin_multiple'])
+                times = librosa.frames_to_time(np.arange(inputnp.shape[0]),sr=sr,hop_length=hop_length)
+                outputnp = mid2outputnp(pm_mid,times)
+
+                # check that num onsets is equal
+                if inputnp.shape[0] == outputnp.shape[0]:
+                    print("adding to dataset fprefix {}".format(fprefix))
+                    addCnt += 1
+                    framecnt += inputnp.shape[0]
+                    print("framecnt is {}".format(framecnt))
+                    inputs.append(inputnp)
+                    outputs.append(outputnp)
+                else:
+                    print("error for fprefix {}".format(fprefix))
+                    errCnt += 1
+                    print(inputnp.shape)
+                    print(outputnp.shape)
+
+            print("{} examples in dataset".format(addCnt))
+            print("{} examples couldnt be processed".format(errCnt))
+
+    return (inputs, outputs, addCnt, errCnt)
 def preprocess(args):
     #params
     path = os.path.join('models',args['model_name'])
     config = load_config(os.path.join(path,'config.json'))
 
+    pool=multiprocessing.Pool(args['threads'])
 
 
     bin_multiple = int(args['bin_multiple'])
@@ -206,62 +256,40 @@ def preprocess(args):
 
 
 
-    framecnt = 0
-
     # hack to deal with high PPQ from MAPS
     # https://github.com/craffel/pretty-midi/issues/112
     pretty_midi.pretty_midi.MAX_TICK = 1e10
 
-
-    for s in os.listdir(data_dir):
-        subdir = os.path.join(data_dir,s)
+    for s in os.listdir(args['data_dir']):
+        subdir = os.path.join(args['data_dir'],s)
         if not os.path.isdir(subdir):
             continue
+        try:
+            if not args.force:
+                if modelDapathtaExists(path, s):
+                    print("{} exists, skiping".format(s))
+                    continue
+        except AttributeError:
+            if modelDapathtaExists(path, s):
+                print("{} exists, skiping".format(s))
+                continue
+
         # recursively search in subdir
-        print subdir
+        print(subdir)
         inputs,outputs = [],[]
         addCnt, errCnt = 0,0
-        for dp, dn, filenames in os.walk(subdir):
-            # in each level of the directory, look at filenames ending with .mid
-            for f in filenames:
-                # if there exists a .wav file and .midi file with the same name
-
-                if f.endswith('.wav'):
-                    audio_fn = f
-                    fprefix = audio_fn.split('.wav')[0]
-                    mid_fn = fprefix + '.mid'
-                    txt_fn = fprefix + '.txt'
-                    if mid_fn in filenames:
-                        # wav2inputnp
-                        audio_fn = os.path.join(dp,audio_fn)
-                        # mid2outputnp
-                        mid_fn = os.path.join(dp,mid_fn)
-
-                        pm_mid = pretty_midi.PrettyMIDI(mid_fn)
-
-                        inputnp = wav2inputnp(audio_fn,spec_type=spec_type,bin_multiple=bin_multiple)
-                        times = librosa.frames_to_time(np.arange(inputnp.shape[0]),sr=sr,hop_length=hop_length)
-                        outputnp = mid2outputnp(pm_mid,times)
-
-                        # check that num onsets is equal
-                        if inputnp.shape[0] == outputnp.shape[0]:
-                            print("adding to dataset fprefix {}".format(fprefix))
-                            addCnt += 1
-                            framecnt += inputnp.shape[0]
-                            print("framecnt is {}".format(framecnt))
-                            inputs.append(inputnp)
-                            outputs.append(outputnp)
-                        else:
-                            print("error for fprefix {}".format(fprefix))
-                            errCnt += 1
-                            print(inputnp.shape)
-                            print(outputnp.shape)
-
-        print("{} examples in dataset".format(addCnt))
-        print("{} examples couldnt be processed".format(errCnt))
-
+        arguments = []
+        for root, dirs, filename in os.walk(subdir):
+            arguments.append([args, root, dirs, filename])
+        results = pool.starmap(_preprocess, arguments)
 
         # concatenate dynamic list to numpy list of example
+        for i, o, a, e in results:
+            inputs.append(i)
+            outputs.append(o)
+            addCnt+=a
+            errCnt+=e
+
         if addCnt:
             inputs = np.concatenate(inputs)
             outputs = np.concatenate(outputs)
@@ -309,6 +337,8 @@ def preprocess(args):
 
 
 if __name__ == '__main__':
+    counts=multiprocessing.cpu_count()
+
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(
         description='Preprocess MIDI/Audio file pairs into ingestible data')
@@ -316,12 +346,22 @@ if __name__ == '__main__':
     parser.add_argument('model_name',
                         help='model name. will use config from directory and save preprocessed data to it')
 
-    parser.add_argument('data_dir',
-                        help='Path to data dir, searched recursively, used for naming HDF5 file')
+    parser.add_argument('data_dir', default='../maps/',
+                        help='Path to data dir, searched recursively, used for naming HDF5 file (default: %(default)s)')
 
+    parser.add_argument('-b', dest='bin_multiple', type=int, default=4,
+                        help='bin multiple (default: %(default)s)')
+
+    parser.add_argument('-s', dest='spec_type', default='cqt',
+                        help='Spec type (default: %(default)s)')
+
+    parser.add_argument('-f', '--force', action='store_true', default=False,
+                        help='Force overwrite existed model data (default: %(default)s)')
 
     parser.add_argument('--no-zn', dest='zn', action='store_false')
     parser.set_defaults(zn=True)
+
+    parser.add_argument('-t', '--threads', metavar='N',type=int, required=False, help='Numbers of threads for models (default=%(default)s, max={})'.format(str(counts)),default=1)
 
     args = vars(parser.parse_args())
 
